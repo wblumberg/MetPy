@@ -65,6 +65,35 @@ def get_point_count_within_r(center_points, target_points, r):
     indices = tree.query_ball_point(center_points, r)
     return np.array([len(x) for x in indices])
 
+def trim_grid(gx, gy, lbound=0, rbound=0, tbound=0, bbound=0):
+    r"""Trims portions of the grid defined by generate_grid
+
+    Parameters
+    ----------
+    gx : (X, Y) ndarray
+        X dimension meshgrid given by bounding box
+    gy : (X, Y) ndarray
+        Y dimension meshgrid given by bounding box
+    lbound : float
+        number of meters to trim off of left side of box
+    rbound : float
+        number of meters to trim off of right side of box
+    tbound : float
+        number of meters to trim off the top part of the box
+    bbound : float
+        number of meters to trim off of the bottom part of the box
+
+    Returns
+    -------
+    gx : (X, Y) ndarray
+        X dimension meshgrid given by new bounding box
+    gy : (X, Y) ndarray
+        Y dimension meshgrid given by new bounding box
+    """
+    # Trim the top and bottom
+    trim_idx = np.where( (gy > gy[0,0] + bbound) & (gy < gy[-1,0] - tbound) & (gx > gx[0,0] + lbound) & (gx < gx[0,-1] - rbound))
+    
+    return gx[trim_idx[0][0]:trim_idx[0][-1], trim_idx[1][0]: trim_idx[1][-1]], gy[trim_idx[0][0]:trim_idx[0][-1], trim_idx[1][0]: trim_idx[1][-1]]
 
 def generate_grid(horiz_dim, bbox, ignore_warnings=False):
     r"""Generate a meshgrid based on bounding box and x & y resolution

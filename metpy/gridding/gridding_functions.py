@@ -135,7 +135,8 @@ def remove_repeat_coordinates(x, y, z):
 @exporter.export
 def interpolate(x, y, z, interp_type='linear', hres=50000,
                 buffer=1, minimum_neighbors=3, gamma=0.25,
-                kappa_star=5.052, search_radius=None, rbf_func='linear', rbf_smooth=0):
+                kappa_star=5.052, search_radius=None, rbf_func='linear',
+                lbound=0, rbound=0, tbound=0, bbound=0, rbf_smooth=0):
     r"""Interpolate given (x,y), observation (z) pairs to a grid based on given parameters.
 
     Parameters
@@ -172,6 +173,14 @@ def interpolate(x, y, z, interp_type='linear', hres=50000,
         Options include: 'multiquadric', 'inverse', 'gaussian', 'linear', 'cubic',
         'quintic', and 'thin_plate'. Defualt 'linear'. See scipy.interpolate.Rbf for more
         information.
+    lbound : float
+        number of meters to trim off of left side of box
+    rbound : float
+        number of meters to trim off of right side of box
+    tbound : float
+        number of meters to trim off the top part of the box
+    bbound : float
+        number of meters to trim off of the bottom part of the box
     rbf_smooth: float
         Smoothing value applied to rbf interpolation.  Higher values result in more smoothing.
 
@@ -187,6 +196,7 @@ def interpolate(x, y, z, interp_type='linear', hres=50000,
 
     grid_x, grid_y = points.generate_grid(hres, points.get_boundary_coords(x, y),
                                           buffer)
+    grid_x, grid_y = points.trim_grid(grid_x, grid_y, lbound, rbound, tbound, bbound)
 
     if interp_type in ['linear', 'nearest', 'cubic']:
         points_zip = np.array(list(zip(x, y)))
