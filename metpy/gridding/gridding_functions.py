@@ -12,6 +12,8 @@ from scipy.spatial.distance import cdist
 from metpy.gridding import interpolation
 from metpy.gridding import points
 
+import bisect
+
 from ..package_tools import Exporter
 
 import matplotlib.tri as tri
@@ -37,7 +39,7 @@ def calc_avg_spacing(x, y, filter=False):
     """
     
     triang = tri.Triangulation(x,y)
-    for edge in p.edges:
+    for edge in triang.edges:
         edge_length.append(np.sqrt(np.power(x[edge[0]] - x[edge[1]],2) + np.power(y[edge[0]] - y[edge[1]], 2)))
     if filter is True:
         per = np.percentile(edge_length,(10,90))
@@ -228,11 +230,60 @@ def define_grid(x,y,hres,buffer,lbound,rbound,tbound,bbound):
     
     return (grid_x, grid_y)
 
+def bilinear_interp(x, y, x_grid, y_grid, z):
+    if x > np.max(x_grid[0,:]) or x < np.min(x_grid[0,:]) or y > np.max(y_grid[:,0]) or y < np.min(y_grid[:,0]):
+        #print x, np.max(x_grid[0,:]), x, np.min(x_grid[0,:]), y, np.max(y_grid[:,0]), y, np.min(y_grid[:,0])
+        #print "Excluding:", x, y
+        # return masked if the point is outside the grid.
+        return np.ma.masked
+    x_mid = np.interp(x, x_grid[0,:], z[0,:])
+    y_mid = np.interp(y, y_grid[:,0], z[:,0])
 
-def multi_pass(x, y, z, grid, interp_type, min_neighbors, gamma, kappa_star=5.052, ave_spacing, search_radius):
+    x_right = bisect.bisect_left(x_grid[0,:], x)
+    x_left = bisect.bisect_right(x_grid[0,:], x)-1
+    y_top = bisect.bisect_left(y_grid[:,0], y)
+    y_bottom = bisect.bisect_right(y_grid[:,0], y)-1
+
+    gridpt_11 = (x_grid[y_top, x_right], y_grid[y_top, x_right], z[y_top, x_right])
+    gridpt_21 = (x_grid[y_top, x_left], y_grid[y_top, x_left], z[y_top, x_left])
+    gridpt_12 = (x_grid[y_bottom, x_right], y_grid[y_bottom, x_right], z[y_bottom, x_right])
+    gridpt_22 = (x_grid[y_bottom, x_left], y_grid[y_bottom, x_left], z[y_bottom, x_left])
+    return (gridpt_11[2] * (gridpt_21[0] - x) * (gridpt_12[1] - y) +
+            gridpt_21[2] * (x - gridpt_11[0]) * (gridpt_12[1] - y) +
+            gridpt_12[2] * (gridpt_21[0] - x) * (y - gridpt_11[1]) +
+            gridpt_22[2] * (x - gridpt_11[0]) * (y - gridpt_11[1])
+           ) / ((gridpt_21[0] - gridpt_11[0]) * (gridpt_12[1] - gridpt_11[1]) + 0.0)
+
+def multi_pass_barnes(x, y, z, grid, interp_type, passes=2, min_neighbors=3, guess=None, gamma=0.5, kappa_star=5.052, ave_spacing=None, search_radius=None):
     r"""
     """
-    return
+    if guess is None:
+        guess = np.zeros(grid[0].shape)
+    g = gamma
+    for i in xrange(passes):
+        if i == 0:
+            gamma = 1
+            obs = z
+            valid_obs = np.arange(len(obs))
+        else:
+            gamma = g
+            obs = z - back_interp
+            valid_obs = ~back_interp.mask
+        #print valid_obs
+        #print len(valid_obs)
+        #print obs[valid_obs]
+        # Solve for the grid ( do the analysis ) and update guess.
+        result = interpolate(x[valid_obs], y[valid_obs], obs[valid_obs], guess, grid, interp_type='barnes', ave_spacing=ave_spacing, search_radius=search_radius, gamma=gamma)[2]
+        #print result
+        # Back interpolate to the grid points.
+        analysis = []
+        for x_o, y_o, z_o in zip(x,y,z):
+            analysis.append(bilinear_interp(x_o, y_o, grid[0], grid[1], result))
+        back_interp = np.ma.asarray(analysis)
+        print "Pass:", i, "RMS:", round(np.ma.std(z - back_interp),3)
+        # Update the first guess
+        guess = result
+    return result
         
 
 @exporter.export

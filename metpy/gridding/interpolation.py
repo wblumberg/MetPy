@@ -262,7 +262,7 @@ def inverse_distance(xp, yp, variable, grid_x, grid_y, r, gamma=None, kappa=None
             if kind == 'cressman':
                 img[idx] = cressman_point(dists, values, r)
             elif kind == 'barnes':
-                img[idx] = barnes_point(dists, values, kappa)
+                img[idx] = barnes_point(dists, values, kappa, gamma=gamma)
 
             else:
                 raise ValueError(str(kind) + ' interpolation not supported.')
